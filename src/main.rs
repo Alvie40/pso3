@@ -57,7 +57,7 @@ async fn main() -> Result<(), std::io::Error> {
         .nest("/api", api_service)
         .nest("/swagger", ui)
         .nest("/static", StaticFilesEndpoint::new("public")) // Changed to /static path
-        .nest("/", routes::routes())
+        .nest("/", routes::routes(state.clone()))
         .with(CookieJarManager::new())
         .with(LogMiddleware)
         .with(AddData::new(state));

@@ -1,15 +1,24 @@
 use poem::{
-    get, post, Route, EndpointExt,
+    middleware::AddData,
+    web::Html,
+    EndpointExt,
+    IntoEndpoint,
+    Route,
+    get,
+    post,
 };
 use crate::{
-    templates::pages, 
     auth::{
-        handler::{login, register, me, api_login, logout},
-        AdminMiddleware, ChatMiddleware
+        handler::{login, register, me, logout},
+        AdminMiddleware,
+        ChatMiddleware,
     },
+    state::AppState,
+    templates::pages,
+    api::Api,
 };
 
-pub fn routes() -> Route {
+pub fn routes(state: AppState) -> Route {
     Route::new()
         // Public routes
         .at("/", get(pages::login_page))
@@ -23,6 +32,12 @@ pub fn routes() -> Route {
         // Auth routes
         .at("/auth/me", get(me))
         .at("/auth/logout", get(logout))
+        
+        // API routes
+        .nest("/api", 
+            Route::new()
+                .nest("/", Api::new(state).into_endpoint())
+        )
         
         // Admin routes
         .nest("/admin", 

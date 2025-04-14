@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use sqlx::PgPool;
+use anyhow::Result;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Mensagem {
@@ -33,8 +34,8 @@ pub fn mock_mensagens() -> Vec<Mensagem> {
     ]
 }
 
-pub async fn listar_mensagens(pool: &PgPool) -> Result<Vec<Mensagem>, sqlx::Error> {
-    sqlx::query_as!(
+pub async fn listar_mensagens(pool: &PgPool) -> Result<Vec<Mensagem>> {
+    let mensagens = sqlx::query_as!(
         Mensagem,
         r#"
         SELECT id, user_id, texto, recebido, criado_em
@@ -43,7 +44,34 @@ pub async fn listar_mensagens(pool: &PgPool) -> Result<Vec<Mensagem>, sqlx::Erro
         "#
     )
     .fetch_all(pool)
-    .await
+    .await?;
+
+    Ok(mensagens)
+}
+
+pub async fn inserir_mensagem(
+    pool: &PgPool,
+    user_id: Uuid,
+    texto: &str,
+    recebido: bool,
+) -> Result<Mensagem> {
+    let mensagem = sqlx::query_as!(
+        Mensagem,
+        r#"
+        INSERT INTO mensagens (id, user_id, texto, recebido, criado_em)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id, user_id, texto, recebido, criado_em
+        "#,
+        Uuid::new_v4(),
+        user_id,
+        texto,
+        recebido,
+        Utc::now()
+    )
+    .fetch_one(pool)
+    .await?;
+
+    Ok(mensagem)
 }
 
 #[cfg(test)]

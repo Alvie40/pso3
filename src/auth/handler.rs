@@ -53,7 +53,14 @@ pub async fn login(
                         .header("Cache-Control", "no-cache, no-store, must-revalidate")
                         .header("Pragma", "no-cache")
                         .header("Expires", "0")
-                        .header("Set-Cookie", format!("token={}; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=3600", token))
+                        .header(
+                            "Set-Cookie",
+                            format!(
+                                "token={}; Path=/; HttpOnly; SameSite=Strict; Secure; Max-Age=3600",
+                                token
+                            )
+                        )
+                        .header("Set-Cookie", format!("token={}; HttpOnly; Path=/", token))
                         .finish()
                 },
                 Err(e) => {
@@ -79,11 +86,15 @@ pub async fn login(
 
 #[handler]
 pub async fn me(token: AuthToken) -> Response {
-    debug!(target: "auth", user = %token.claims.sub, "🔍 Verificando identidade do usuário");
+    debug!(target: "auth", user = %token.claims.sub, "Checking user identity");
     
     Response::builder()
-        .content_type("application/json; charset=utf-8")
-        .body(serde_json::to_string(&token.claims).unwrap())
+        .status(StatusCode::OK)
+        .content_type("application/json")
+        .body(serde_json::json!({
+            "email": token.claims.sub,
+            "exp": token.claims.exp
+        }).to_string())
 }
 
 #[handler]

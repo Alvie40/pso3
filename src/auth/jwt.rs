@@ -76,7 +76,9 @@ pub fn verify_token(token: &str) -> Result<Claims, JwtError> {
         .map_err(|e| JwtError::MissingEnv(e.to_string()))?;
 
     let key = DecodingKey::from_secret(jwt_secret.as_bytes());
-    let validation = Validation::new(Algorithm::HS256);
+    let mut validation = Validation::new(Algorithm::HS256);
+    validation.validate_exp = true;
+    validation.leeway = 120; // 2 minutes leeway to match validate_token
     
     decode::<Claims>(token, &key, &validation)
         .map(|data| data.claims)
