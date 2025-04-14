@@ -1,0 +1,48 @@
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+use chrono::{DateTime, Utc};
+use sqlx::FromRow;
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct User {
+    pub id: Uuid,
+    pub empresa_id: Uuid,
+    pub nome: String,
+    pub cpf: String,
+    pub telefone: String,
+    pub email: String,
+    pub senha: String, // Renomeei de "password" para "senha" para alinhar com o SQL
+    pub categoria: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+pub fn mock_users() -> Vec<User> {
+    let now = Utc::now();
+    vec![
+        User {
+            id: Uuid::new_v4(),
+            empresa_id: Uuid::new_v4(), // Placeholder para uma empresa
+            nome: "Admin User".to_string(),
+            cpf: "123.456.789-00".to_string(),
+            telefone: "(11) 98765-4321".to_string(),
+            email: "admin@demo.com".to_string(),
+            senha: "123456".to_string(),
+            categoria: "Administrador".to_string(),
+            created_at: now,
+            updated_at: now,
+        },
+        User {
+            id: Uuid::new_v4(),
+            empresa_id: Uuid::new_v4(), // Placeholder para outra empresa
+            nome: "Regular User".to_string(),
+            cpf: "987.654.321-00".to_string(),
+            telefone: "(11) 91234-5678".to_string(),
+            email: "user@demo.com".to_string(),
+            senha: "abcdef".to_string(),
+            categoria: "Usuário".to_string(),
+            created_at: now,
+            updated_at: now,
+        },
+    ]
+}

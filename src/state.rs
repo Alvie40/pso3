@@ -1,13 +1,12 @@
+use sqlx::PgPool;
 
 #[derive(Clone)]
 pub struct AppState {
-    // Exemplo de campos que você pode adicionar aqui futuramente
+    pub db: PgPool,
 }
 
 impl AppState {
-    pub fn new() -> Self {
-        Self {
-            // Inicializações aqui
-        }
+    pub fn new(pool: PgPool) -> Self {
+        Self { db: pool }
     }
 }
