@@ -1,6 +1,6 @@
 use poem::{
     handler,
-    web::{Form, Data, Json, cookie::CookieJar},
+    web::{Form, Data, Json},
     Response,
     http::StatusCode,
 };
@@ -10,7 +10,7 @@ use uuid::Uuid;
 use chrono::Utc;
 
 use crate::state::AppState;
-use super::dto::{Claims, LoginPayload, RegisterPayload};
+use super::dto::{Claims, LoginPayload, RegisterPayload, AuthToken};
 use super::token::{generate_token, validate_token};
 
 #[handler]
@@ -78,33 +78,12 @@ pub async fn login(
 }
 
 #[handler]
-pub async fn me(jar: &CookieJar) -> Response {
-    debug!(target: "auth", "Checking user identity");
+pub async fn me(token: AuthToken) -> Response {
+    debug!(target: "auth", user = %token.claims.sub, "🔍 Verificando identidade do usuário");
     
-    let token = jar.get("token")
-        .and_then(|c| c.value::<String>().ok());
-
-    match token {
-        Some(t) => match validate_token(&t) {
-            Ok(claims) => {
-                debug!(target: "auth", user = %claims.sub, "Identity verified");
-                Response::builder()
-                    .content_type("application/json; charset=utf-8")
-                    .body(serde_json::to_string(&claims).unwrap())
-            }
-            Err(e) => {
-                error!(target: "auth", "Token validation failed: {:?}", e);
-                Response::builder()
-                    .status(StatusCode::UNAUTHORIZED)
-                    .content_type("text/plain; charset=utf-8")
-                    .body("Token inválido")
-            }
-        },
-        None => Response::builder()
-            .status(StatusCode::UNAUTHORIZED)
-            .content_type("text/plain; charset=utf-8")
-            .body("Token não encontrado")
-    }
+    Response::builder()
+        .content_type("application/json; charset=utf-8")
+        .body(serde_json::to_string(&token.claims).unwrap())
 }
 
 #[handler]

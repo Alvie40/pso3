@@ -84,21 +84,28 @@
             try {
                 const response = await fetch('/auth/me', {
                     credentials: 'include',
+                    cache: 'no-store',
                     headers: {
-                        'Cache-Control': 'no-cache',
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
                         'Pragma': 'no-cache'
                     }
                 });
 
-                if (!response.ok) {
+                if (response.status === 401) {
                     window.location.href = '/login?error=session_expired';
                     return false;
                 }
+
+                if (!response.ok) {
+                    console.warn('Session check returned unexpected status:', response.status);
+                    return true; // Don't redirect on non-401 errors
+                }
+
+                const data = await response.json();
                 return true;
             } catch (error) {
                 console.error('Error checking session:', error);
-                window.location.href = '/login?error=session_expired';
-                return false;
+                return true; // Don't redirect on network errors
             }
         }
 
@@ -127,11 +134,17 @@
             submitButton.disabled = true;
             
             try {
+                const token = document.cookie
+                    .split('; ')
+                    .find(row => row.startsWith('token='))
+                    ?.split('=')[1];
+
                 const formData = new FormData(e.target);
                 const response = await fetch('/api/whatsapp', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Authorization': token ? `Bearer ${token}` : '',
                     },
                     credentials: 'include',
                     body: JSON.stringify({
@@ -167,9 +180,16 @@
         // Load messages
         async function loadMessages() {
             try {
+                // Get token from cookie
+                const token = document.cookie
+                    .split('; ')
+                    .find(row => row.startsWith('token='))
+                    ?.split('=')[1];
+
                 const response = await fetch('/api/messages', {
                     credentials: 'include',
                     headers: {
+                        'Authorization': token ? `Bearer ${token}` : '',
                         'Cache-Control': 'no-cache',
                         'Pragma': 'no-cache'
                     }

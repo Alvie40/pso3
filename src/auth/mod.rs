@@ -32,9 +32,14 @@ fn get_token_from_cookie(req: &Request) -> Option<String> {
     req.header(header::COOKIE)
         .and_then(|value| value.as_bytes().get(0..).map(|s| String::from_utf8_lossy(s).into_owned()))
         .and_then(|cookie_str| {
+            debug!(target: "auth", cookie = %cookie_str, "🍪 Cookie recebido");
             cookie_str.split(';')
                 .find(|s| s.trim().starts_with("token="))
-                .map(|s| s.trim()[6..].to_string())
+                .map(|s| {
+                    let token = s.trim()[6..].to_string();
+                    debug!(target: "auth", token_length = token.len(), "🎫 Token extraído do cookie");
+                    token
+                })
         })
 }
 
@@ -47,12 +52,12 @@ impl<E: Endpoint<Output = Response>> Endpoint for AdminMiddlewareImpl<E> {
             match token::validate_token(&token) {
                 Ok(_) => self.0.call(req).await,
                 Err(e) => {
-                    warn!(target: "auth", error = %e, "Admin token validation failed");
+                    warn!(target: "auth", error = %e, "❌ Falha na validação do token admin");
                     Err(Error::from_status(StatusCode::UNAUTHORIZED))
                 }
             }
         } else {
-            warn!(target: "auth", "No admin token found");
+            warn!(target: "auth", "⚠️ Token admin não encontrado");
             Err(Error::from_status(StatusCode::UNAUTHORIZED))
         }
     }
@@ -63,16 +68,16 @@ impl<E: Endpoint<Output = Response>> Endpoint for ChatMiddlewareImpl<E> {
     type Output = Response;
 
     async fn call(&self, req: Request) -> Result<Self::Output> {
-        debug!(target: "auth", "Validating chat access token");
+        debug!(target: "auth", path = %req.uri().path(), "🔍 Validando acesso ao chat");
 
         if let Some(token) = get_token_from_cookie(&req) {
             match token::validate_token(&token) {
                 Ok(claims) => {
-                    debug!(target: "auth", user = %claims.sub, "Chat access authorized");
+                    debug!(target: "auth", user = %claims.sub, "✅ Acesso ao chat autorizado");
                     self.0.call(req).await
                 }
                 Err(e) => {
-                    warn!(target: "auth", error = %e, "Token validation failed");
+                    warn!(target: "auth", error = %e, "❌ Token inválido ou expirado");
                     Ok(Response::builder()
                         .status(StatusCode::FOUND)
                         .header("Location", "/login?error=session_expired")
@@ -83,7 +88,7 @@ impl<E: Endpoint<Output = Response>> Endpoint for ChatMiddlewareImpl<E> {
                 }
             }
         } else {
-            warn!(target: "auth", "No token found in request");
+            warn!(target: "auth", "⚠️ Nenhum token encontrado");
             Ok(Response::builder()
                 .status(StatusCode::FOUND)
                 .header("Location", "/login")
