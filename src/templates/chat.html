@@ -3,43 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Chat - PSO3</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.5);
-        }
-
-        .modal-content {
-            background-color: #fefefe;
-            margin: 15% auto;
-            padding: 20px;
-            border: 1px solid #888;
-            width: 80%;
-            max-width: 500px;
-            border-radius: 8px;
-        }
-    </style>
 </head>
 <body class="bg-gray-100 min-h-screen">
-    <!-- Adicionar o modal no início do body -->
-    <div id="sessionExpiredModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden items-center justify-center">
-        <div class="bg-white p-8 rounded-lg shadow-xl">
-            <h2 class="text-xl font-bold mb-4">Sessão Expirada</h2>
-            <p class="mb-6">Sua sessão expirou. Por favor, faça login novamente para continuar.</p>
-            <button onclick="window.location.href='/login'" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-                Fazer Login
-            </button>
-        </div>
-    </div>
-
     <nav class="bg-white shadow-lg">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between h-16">
@@ -47,7 +17,7 @@
                     <h1 class="text-xl font-semibold">PSO3 Chat</h1>
                 </div>
                 <div class="flex items-center">
-                    <a href="/logout" class="text-gray-600 hover:text-gray-900">Sair</a>
+                    <button onclick="logout()" class="text-gray-600 hover:text-gray-900">Sair</button>
                 </div>
             </div>
         </div>
@@ -98,17 +68,6 @@
         </div>
     </div>
 
-    <!-- Modal de sessão expirada -->
-    <div id="sessionModal" class="modal">
-        <div class="modal-content">
-            <h2 class="text-xl font-bold mb-4">Sessão Expirada</h2>
-            <p class="mb-4">Sua sessão expirou. Por favor, faça login novamente para continuar.</p>
-            <button onclick="redirectToLogin()" class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                Fazer Login
-            </button>
-        </div>
-    </div>
-
     <script>
         // Format phone number input
         document.getElementById('to').addEventListener('input', function(e) {
@@ -121,42 +80,38 @@
             e.target.value = value;
         });
 
-        function showSessionExpiredModal() {
-            const modal = document.getElementById('sessionExpiredModal');
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-        }
-
-        function redirectToLogin() {
-            window.location.href = '/login';
-        }
-
-        // Função para verificar a validade do token
         async function checkSession() {
-            const token = document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1];
-            
-            if (!token) {
-                showSessionExpiredModal();
-                return false;
-            }
-
             try {
-                const response = await fetch('/me', {
+                const response = await fetch('/auth/me', {
+                    credentials: 'include',
                     headers: {
-                        'Authorization': `Bearer ${token}`
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache'
                     }
                 });
 
                 if (!response.ok) {
-                    if (response.status === 401) {
-                        showSessionExpiredModal();
-                        return false;
-                    }
+                    window.location.href = '/login?error=session_expired';
+                    return false;
                 }
                 return true;
             } catch (error) {
                 console.error('Error checking session:', error);
+                window.location.href = '/login?error=session_expired';
                 return false;
+            }
+        }
+
+        async function logout() {
+            try {
+                await fetch('/auth/logout', {
+                    method: 'GET',
+                    credentials: 'include'
+                });
+                window.location.href = '/login';
+            } catch (error) {
+                console.error('Error logging out:', error);
+                window.location.href = '/login';
             }
         }
 
@@ -168,64 +123,61 @@
                 return;
             }
 
-            const to = document.getElementById('to').value;
-            const message = document.getElementById('message').value;
+            const submitButton = e.target.querySelector('button[type="submit"]');
+            submitButton.disabled = true;
             
             try {
+                const formData = new FormData(e.target);
                 const response = await fetch('/api/whatsapp', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
                     },
-                    body: JSON.stringify({ to, message })
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        to: formData.get('to'),
+                        message: formData.get('message')
+                    })
                 });
 
                 if (!response.ok) {
                     if (response.status === 401) {
-                        showSessionExpiredModal();
+                        window.location.href = '/login?error=session_expired';
                         return;
                     }
                     throw new Error('Erro ao enviar mensagem');
                 }
 
-                // Limpa o formulário
-                document.getElementById('message').value = '';
+                // Clear the form
+                e.target.reset();
                 
-                // Recarrega as mensagens
+                // Reload messages
                 loadMessages();
 
-                // Feedback visual
+                // Show success message
                 alert('Mensagem enviada com sucesso!');
             } catch (error) {
                 console.error('Error sending message:', error);
                 alert('Erro ao enviar mensagem: ' + error.message);
+            } finally {
+                submitButton.disabled = false;
             }
         });
 
         // Load messages
         async function loadMessages() {
-            if (!await checkSession()) {
-                return;
-            }
-
             try {
-                const token = document.cookie.split('; ').find(row => row.startsWith('token='))?.split('=')[1];
-                
-                if (!token) {
-                    showSessionExpiredModal();
-                    return;
-                }
-
-                const response = await fetch('/mensagens', {
+                const response = await fetch('/api/messages', {
+                    credentials: 'include',
                     headers: {
-                        'Authorization': `Bearer ${token}`
+                        'Cache-Control': 'no-cache',
+                        'Pragma': 'no-cache'
                     }
                 });
                 
                 if (!response.ok) {
                     if (response.status === 401) {
-                        showSessionExpiredModal();
+                        window.location.href = '/login?error=session_expired';
                         return;
                     }
                     throw new Error('Erro ao carregar mensagens');
@@ -244,14 +196,16 @@
             }
         }
 
-        // Verificar sessão a cada 5 minutos
-        setInterval(checkSession, 300000);
-
-        // Load messages on page load
-        loadMessages();
-
-        // Reload messages every 30 seconds
-        setInterval(loadMessages, 30000);
+        // Initial session check and load messages
+        (async function init() {
+            if (await checkSession()) {
+                loadMessages();
+                // Set up periodic session checks
+                setInterval(checkSession, 60000); // Check session every minute
+                // Set up periodic message updates
+                setInterval(loadMessages, 30000); // Update messages every 30 seconds
+            }
+        })();
     </script>
 </body>
 </html>

@@ -45,6 +45,7 @@ pub fn validate_token(token: &str) -> Result<Claims, JwtError> {
     let key = DecodingKey::from_secret(jwt_secret.as_bytes());
     let mut validation = Validation::new(Algorithm::HS256);
     validation.validate_exp = true;
+    validation.leeway = 60; // Add 60 seconds leeway for clock skew
     
     match decode::<Claims>(token, &key, &validation) {
         Ok(token_data) => {

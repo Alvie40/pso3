@@ -1,5 +1,5 @@
-use poem::{Middleware, Request, Response, Result, Error, Endpoint, http::StatusCode, web::cookie::{Cookie, CookieJar}};
-use poem::http::HeaderMap;
+use poem::{Middleware, Request, Response, Result, Error, Endpoint, http::{StatusCode, header}};
+use tracing::{debug, warn};
 
 pub mod dto;
 pub mod handler;
@@ -28,9 +28,9 @@ impl<E: Endpoint<Output = Response>> Middleware<E> for ChatMiddleware {
 pub struct AdminMiddlewareImpl<E>(E);
 pub struct ChatMiddlewareImpl<E>(E);
 
-fn get_token_from_headers(headers: &HeaderMap) -> Option<String> {
-    headers.get("Cookie")
-        .and_then(|c| c.to_str().ok())
+fn get_token_from_cookie(req: &Request) -> Option<String> {
+    req.header(header::COOKIE)
+        .and_then(|value| value.as_bytes().get(0..).map(|s| String::from_utf8_lossy(s).into_owned()))
         .and_then(|cookie_str| {
             cookie_str.split(';')
                 .find(|s| s.trim().starts_with("token="))
@@ -43,15 +43,17 @@ impl<E: Endpoint<Output = Response>> Endpoint for AdminMiddlewareImpl<E> {
     type Output = Response;
 
     async fn call(&self, req: Request) -> Result<Self::Output> {
-        let token = get_token_from_headers(req.headers());
-
-        match token {
-            Some(token_str) => {
-                token::validate_token(&token_str)
-                    .map_err(|_| Error::from_status(StatusCode::UNAUTHORIZED))?;
-                self.0.call(req).await
+        if let Some(token) = get_token_from_cookie(&req) {
+            match token::validate_token(&token) {
+                Ok(_) => self.0.call(req).await,
+                Err(e) => {
+                    warn!(target: "auth", error = %e, "Admin token validation failed");
+                    Err(Error::from_status(StatusCode::UNAUTHORIZED))
+                }
             }
-            None => Err(Error::from_status(StatusCode::UNAUTHORIZED))
+        } else {
+            warn!(target: "auth", "No admin token found");
+            Err(Error::from_status(StatusCode::UNAUTHORIZED))
         }
     }
 }
@@ -61,20 +63,28 @@ impl<E: Endpoint<Output = Response>> Endpoint for ChatMiddlewareImpl<E> {
     type Output = Response;
 
     async fn call(&self, req: Request) -> Result<Self::Output> {
-        let token = get_token_from_headers(req.headers());
+        debug!(target: "auth", "Validating chat access token");
 
-        match token {
-            Some(token_str) => match token::validate_token(&token_str) {
-                Ok(_) => self.0.call(req).await,
-                Err(_) => Ok(Response::builder()
-                    .status(StatusCode::FOUND)
-                    .header("Location", "/login?error=session_expired")
-                    .header("Cache-Control", "no-store, no-cache, must-revalidate")
-                    .header("Pragma", "no-cache")
-                    .header("Set-Cookie", "token=; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=0")
-                    .finish())
-            },
-            None => Ok(Response::builder()
+        if let Some(token) = get_token_from_cookie(&req) {
+            match token::validate_token(&token) {
+                Ok(claims) => {
+                    debug!(target: "auth", user = %claims.sub, "Chat access authorized");
+                    self.0.call(req).await
+                }
+                Err(e) => {
+                    warn!(target: "auth", error = %e, "Token validation failed");
+                    Ok(Response::builder()
+                        .status(StatusCode::FOUND)
+                        .header("Location", "/login?error=session_expired")
+                        .header("Set-Cookie", "token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure")
+                        .header("Cache-Control", "no-store, no-cache, must-revalidate")
+                        .header("Pragma", "no-cache")
+                        .finish())
+                }
+            }
+        } else {
+            warn!(target: "auth", "No token found in request");
+            Ok(Response::builder()
                 .status(StatusCode::FOUND)
                 .header("Location", "/login")
                 .header("Cache-Control", "no-store, no-cache, must-revalidate")

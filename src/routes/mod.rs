@@ -11,18 +11,20 @@ use crate::{
 
 pub fn routes() -> Route {
     Route::new()
-        // Páginas estáticas/templates
+        // Public routes
         .at("/", get(pages::login_page))
-        .at("/login", get(pages::login_page).post(login))  // This will handle both GET and POST
+        .at("/login", get(pages::login_page).post(login))
         .at("/cadastro", get(pages::cadastro_page))
+        .at("/auth/register", post(register))
+        
+        // Protected chat route
         .at("/chat", get(pages::chat_page).with(ChatMiddleware))
         
-        // Rotas de autenticação
-        .at("/auth/register", post(register))
+        // Auth routes
         .at("/auth/me", get(me))
         .at("/auth/logout", get(logout))
         
-        // Área administrativa
+        // Admin routes
         .nest("/admin", 
             Route::new()
                 .at("/", get(pages::admin_page))
